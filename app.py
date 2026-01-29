@@ -6,7 +6,8 @@ import json
 import os
 
 # --- CONFIGURAZIONE CHIAVE MASTER (FISSA) ---
-MY_MASTER_KEY = "AIzaSyAdhh9EJ6uj0CCeefFpuq7rfsu7qHzuCyE"
+MY_MASTER_KEY = st.secrets["GEMINI_KEY"]
+genai.configure(api_key=MY_MASTER_KEY)
 
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="Frigo Pro AI 2.5", layout="centered", page_icon="🥗")
@@ -164,3 +165,4 @@ for i, v in enumerate(st.session_state.dispensa):
         salva_carica_dati("salva"); st.rerun()
     if c2.button("🗑️ Finito", key=f"d_{i}"):
         st.session_state.dispensa.pop(i); salva_carica_dati("salva"); st.rerun()
+
