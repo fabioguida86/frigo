@@ -56,20 +56,27 @@ st.markdown('<div class="main-header"><h1>🥗 Frigo Pro AI</h1></div>', unsafe_
 tab1, tab2, tab3, tab4 = st.tabs(["📸 Scanner", "🧊 Freezer", "🍲 Ricette", "⚖️ Legale"])
 
 with tab1:
-    tipo_scan = st.radio("Cosa vuoi scansionare?", ["Scontrino", "Codice a Barre"], horizontal=True)
-    # L'uploader su mobile attiva l'opzione Fotocamera
-    f_img = st.file_uploader("Scatta una foto al prodotto o scontrino", type=["jpg", "png", "jpeg"])
+    tipo_scan = st.radio("Modalità:", ["Scontrino", "Codice a Barre"], horizontal=True)
+    f_img = st.file_uploader("Scatta foto (Solo Alimenti)", type=["jpg", "png", "jpeg"])
     
-    if f_img and st.button("Analizza Immagine 🚀"):
+    if f_img and st.button("Analizza Solo Alimenti 🚀"):
         img = PIL.Image.open(f_img)
         img.thumbnail((1024, 1024))
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        prompt = "Analizza l'immagine. Scrivi ogni prodotto su una riga separata così: NOME | GIORNI_SCADENZA_NUMERO"
-        if tipo_scan == "Codice a Barre":
-            prompt = "Identifica il prodotto da questo codice a barre o confezione. Rispondi solo: NOME | GIORNI_SCADENZA_NUMERO"
+        # PROMPT CON FILTRO INTELLIGENTE
+        prompt = """
+        Analizza l'immagine. Segui queste regole rigorose:
+        1. Estrai SOLO i prodotti alimentari (cibo e bevande).
+        2. IGNORA prodotti per la pulizia, sacchetti, elettronica, abbigliamento o detersivi.
+        3. Per ogni alimento scrivi: NOME | GIORNI_SCADENZA_NUMERO.
+        4. Non scrivere prefissi o commenti.
+        """
         
-        with st.spinner("L'IA sta leggendo..."):
+        if tipo_scan == "Codice a Barre":
+            prompt = "Identifica l'alimento dal codice a barre. Ignora se non è cibo. Rispondi: NOME | GIORNI_SCADENZA_NUMERO"
+        
+        with st.spinner("Filtrando gli alimenti..."):
             res = model.generate_content([prompt, img])
             for riga in res.text.strip().split('\n'):
                 if "|" in riga:
@@ -81,7 +88,7 @@ with tab1:
 
 with tab2:
     st.subheader("❄️ Aggiunta Rapida Freezer")
-    nuovo = st.text_input("Inserisci nome:")
+    nuovo = st.text_input("Inserisci nome alimento:")
     if st.button("Metti in Freezer"):
         if nuovo:
             st.session_state.congelati.append({"nome": nuovo, "scad": "❄️"})
@@ -91,12 +98,12 @@ with tab3:
     st.subheader("🍲 Chef AI")
     if st.session_state.dispensa:
         prodotti = ", ".join([p['nome'] for p in st.session_state.dispensa])
-        if st.button("Genera Ricetta con la mia Dispensa"):
+        if st.button("Genera Ricetta con Alimenti in Dispensa"):
             model = genai.GenerativeModel('gemini-2.5-flash')
-            res = model.generate_content(f"Crea una ricetta veloce con alcuni di questi ingredienti: {prodotti}. Sii breve.")
+            res = model.generate_content(f"Crea una ricetta breve con alcuni di questi alimenti: {prodotti}.")
             st.write(res.text)
     else:
-        st.write("Scansiona prima qualcosa per avere ricette!")
+        st.write("Scansiona prima degli alimenti!")
 
 # --- 5. VISUALIZZAZIONE ---
 st.divider()
@@ -118,12 +125,4 @@ with col1:
 
 with col2:
     st.markdown("### 🧊 Freezer")
-    for i, v in enumerate(list(st.session_state.congelati)):
-        st.markdown(f"""
-            <div class="card" style="border-left-color: #2196F3;">
-                <div class="product-name">{v['nome']}</div>
-                <div class="expiry-text">{v['scad']} (Surgelato)</div>
-            </div>
-        """, unsafe_allow_html=True)
-        if st.button("🗑️", key=f"s_{i}"):
-            st.session_state.congelati.pop(i); salva(); st.rerun()
+    for i, v in enumerate(list(st.session_state
