@@ -97,7 +97,7 @@ with col1:
         st.markdown(f"""
             <div class="card">
                 <div class="product-name">{v['nome']}</div>
-                <div class="expiry-text">Scadenza stimata: <b>{v['scad']} gg</b></div>
+                <div class="expiry-text">: <b>{v['scad']} gg</b></div>
             </div>
         """, unsafe_allow_html=True)
         c1, c2 = st.columns(2)
@@ -120,3 +120,4 @@ with col2:
         """, unsafe_allow_html=True)
         if st.button("🗑️", key=f"s_{i}"):
             st.session_state.congelati.pop(i); salva(); st.rerun()
+
