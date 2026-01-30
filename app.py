@@ -4,7 +4,7 @@ import PIL.Image
 import json
 import os
 
-# --- 1. CONFIGURAZIONE ---
+# --- 1. CONFIGURAZIONE CHIAVE ---
 try:
     MY_MASTER_KEY = st.secrets["GEMINI_KEY"]
 except KeyError:
@@ -15,26 +15,51 @@ if MY_MASTER_KEY:
 
 st.set_page_config(page_title="Frigo Pro AI", layout="centered", page_icon="🥗")
 
-# --- 2. CSS CUSTOM ---
-st.markdown("""
+# --- 2. GESTIONE LINGUE (TRADUZIONI) ---
+languages = {
+    "Italiano": {
+        "scan": "📸 Scanner", "freezer": "🧊 Freezer", "recipes": "🍲 Ricette", "legal": "⚖️ Legale",
+        "mode": "Modalità:", "receipt": "Scontrino", "barcode": "Codice a Barre",
+        "upload_text": "Scatta foto (Solo Alimenti)", "btn_scan": "Analizza Solo Alimenti 🚀",
+        "pantry": "🍎 Dispensa", "manual_add": "Aggiunta Rapida Freezer", "btn_freeze": "Metti in Freezer",
+        "chef": "🍲 Chef AI", "btn_recipe": "Genera Ricetta", "expiry": "Scadenza", "days": "gg",
+        "frozen_label": "Surgelato", "ai_msg": "Filtrando gli alimenti...", "prompt_rules": "Estrai SOLO prodotti alimentari."
+    },
+    "English": {
+        "scan": "📸 Scanner", "freezer": "🧊 Freezer", "recipes": "🍲 Recipes", "legal": "⚖️ Legal",
+        "mode": "Mode:", "receipt": "Receipt", "barcode": "Barcode",
+        "upload_text": "Take photo (Food Only)", "btn_scan": "Analyze Food Only 🚀",
+        "pantry": "🍎 Pantry", "manual_add": "Quick Add Freezer", "btn_freeze": "Add to Freezer",
+        "chef": "🍲 AI Chef", "btn_recipe": "Generate Recipe", "expiry": "Expiry", "days": "days",
+        "frozen_label": "Frozen", "ai_msg": "Filtering food items...", "prompt_rules": "Extract ONLY food products."
+    },
+    "Español": {
+        "scan": "📸 Scanner", "freezer": "🧊 Congelador", "recipes": "🍲 Recetas", "legal": "⚖️ Legal",
+        "mode": "Modo:", "receipt": "Recibo", "barcode": "Código de Barras",
+        "upload_text": "Tomar foto (Solo Alimento)", "btn_scan": "Analizar Alimento 🚀",
+        "pantry": "🍎 Despensa", "manual_add": "Añadir al Congelador", "btn_freeze": "Congelar",
+        "chef": "🍲 Chef AI", "btn_recipe": "Generar Receta", "expiry": "Caducidad", "days": "días",
+        "frozen_label": "Congelado", "ai_msg": "Filtrando alimentos...", "prompt_rules": "Extraer SOLO productos alimenticios."
+    }
+}
+
+# Selettore Lingua nella Sidebar (Barra laterale)
+st.sidebar.title("Settings")
+sel_lang = st.sidebar.selectbox("Language / Lingua", list(languages.keys()))
+t = languages[sel_lang]
+
+# --- 3. CSS CUSTOM ---
+st.markdown(f"""
     <style>
-    .main-header {
-        text-align: center; padding: 15px;
-        background: linear-gradient(135deg, #4CAF50, #2E7D32);
-        color: white; border-radius: 0 0 20px 20px; margin-bottom: 15px;
-    }
-    .card {
-        background: white; padding: 12px; border-radius: 12px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 8px;
-        border-left: 4px solid #4CAF50;
-    }
-    .product-name { color: #1a1a1a !important; font-size: 1rem; font-weight: 600; }
-    .expiry-text { color: #555 !important; font-size: 0.85rem; }
-    .stButton>button { width: 100%; border-radius: 8px; height: 35px; }
+    .main-header {{ text-align: center; padding: 15px; background: linear-gradient(135deg, #4CAF50, #2E7D32); color: white; border-radius: 0 0 20px 20px; margin-bottom: 15px; }}
+    .card {{ background: white; padding: 12px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 8px; border-left: 4px solid #4CAF50; }}
+    .product-name {{ color: #1a1a1a !important; font-size: 1rem; font-weight: 600; }}
+    .expiry-text {{ color: #555 !important; font-size: 0.85rem; }}
+    .stButton>button {{ width: 100%; border-radius: 8px; height: 35px; }}
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. DATABASE ---
+# --- 4. DATABASE ---
 DATABASE_FILE = "dispensa_v3.json"
 if "dispensa" not in st.session_state:
     st.session_state.dispensa, st.session_state.congelati = [], []
@@ -50,33 +75,23 @@ def salva():
     with open(DATABASE_FILE, "w") as f:
         json.dump({"d": st.session_state.dispensa, "c": st.session_state.congelati}, f)
 
-# --- 4. INTERFACCIA ---
+# --- 5. INTERFACCIA ---
 st.markdown('<div class="main-header"><h1>🥗 Frigo Pro AI</h1></div>', unsafe_allow_html=True)
 
-tab1, tab2, tab3, tab4 = st.tabs(["📸 Scanner", "🧊 Freezer", "🍲 Ricette", "⚖️ Legale"])
+tabs = st.tabs([t["scan"], t["freezer"], t["recipes"], t["legal"]])
 
-with tab1:
-    tipo_scan = st.radio("Modalità:", ["Scontrino", "Codice a Barre"], horizontal=True)
-    f_img = st.file_uploader("Scatta foto (Solo Alimenti)", type=["jpg", "png", "jpeg"])
+with tabs[0]:
+    tipo_scan = st.radio(t["mode"], [t["receipt"], t["barcode"]], horizontal=True)
+    f_img = st.file_uploader(t["upload_text"], type=["jpg", "png", "jpeg"])
     
-    if f_img and st.button("Analizza Solo Alimenti 🚀"):
+    if f_img and st.button(t["btn_scan"]):
         img = PIL.Image.open(f_img)
         img.thumbnail((1024, 1024))
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        # PROMPT CON FILTRO INTELLIGENTE
-        prompt = """
-        Analizza l'immagine. Segui queste regole rigorose:
-        1. Estrai SOLO i prodotti alimentari (cibo e bevande).
-        2. IGNORA prodotti per la pulizia, sacchetti, elettronica, abbigliamento o detersivi.
-        3. Per ogni alimento scrivi: NOME | GIORNI_SCADENZA_NUMERO.
-        4. Non scrivere prefissi o commenti.
-        """
+        prompt = f"{t['prompt_rules']} Extract as: NAME | DAYS_TO_EXPIRY. Language: {sel_lang}."
         
-        if tipo_scan == "Codice a Barre":
-            prompt = "Identifica l'alimento dal codice a barre. Ignora se non è cibo. Rispondi: NOME | GIORNI_SCADENZA_NUMERO"
-        
-        with st.spinner("Filtrando gli alimenti..."):
+        with st.spinner(t["ai_msg"]):
             res = model.generate_content([prompt, img])
             for riga in res.text.strip().split('\n'):
                 if "|" in riga:
@@ -86,33 +101,31 @@ with tab1:
                     st.session_state.dispensa.append({"nome": nome, "scad": scad if scad else "7"})
             salva(); st.rerun()
 
-with tab2:
-    st.subheader("❄️ Aggiunta Rapida Freezer")
-    nuovo = st.text_input("Inserisci nome alimento:")
-    if st.button("Metti in Freezer"):
+with tabs[1]:
+    st.subheader(f"❄️ {t['manual_add']}")
+    nuovo = st.text_input(f"{t['pantry']} name:")
+    if st.button(t["btn_freeze"]):
         if nuovo:
             st.session_state.congelati.append({"nome": nuovo, "scad": "❄️"})
             salva(); st.rerun()
 
-with tab3:
-    st.subheader("🍲 Chef AI")
+with tabs[2]:
+    st.subheader(t["chef"])
     if st.session_state.dispensa:
         prodotti = ", ".join([p['nome'] for p in st.session_state.dispensa])
-        if st.button("Genera Ricetta con Alimenti in Dispensa"):
+        if st.button(t["btn_recipe"]):
             model = genai.GenerativeModel('gemini-2.5-flash')
-            res = model.generate_content(f"Crea una ricetta breve con alcuni di questi alimenti: {prodotti}.")
+            res = model.generate_content(f"Create a short recipe in {sel_lang} using: {prodotti}.")
             st.write(res.text)
-    else:
-        st.write("Scansiona prima degli alimenti!")
 
-# --- 5. VISUALIZZAZIONE ---
+# --- 6. VISUALIZZAZIONE ---
 st.divider()
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("### 🍎 Dispensa")
+    st.markdown(f"### {t['pantry']}")
     for i, v in enumerate(list(st.session_state.dispensa)):
-        st.markdown(f'<div class="card"><div class="product-name">{v["nome"]}</div><div class="expiry-text">{v["scad"]} gg</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="card"><div class="product-name">{v["nome"]}</div><div class="expiry-text">{v["scad"]} {t["days"]}</div></div>', unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
             if st.button("🗑️", key=f"d_{i}"):
@@ -124,8 +137,6 @@ with col1:
                 salva(); st.rerun()
 
 with col2:
-    st.markdown("### 🧊 Freezer")
+    st.markdown(f"### {t['freezer']}")
     for i, v in enumerate(list(st.session_state.congelati)):
-        st.markdown(f'<div class="card" style="border-left-color: #2196F3;"><div class="product-name">{v["nome"]}</div><div class="expiry-text">{v["scad"]} (Surgelato)</div></div>', unsafe_allow_html=True)
-        if st.button("🗑️", key=f"s_{i}"):
-            st.session_state.congelati.pop(i); salva(); st.rerun()
+        st.markdown(f'<div class="card" style="border-left-color: #2196F3;"><div class="product-name">{v["nome"]}</div><div
