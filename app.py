@@ -7,10 +7,8 @@ import streamlit.components.v1 as components
 
 # --- 1. CONFIGURAZIONE CHIAVE SICURA (DA STREAMLIT SECRETS) ---
 try:
-    # Cerca la chiave salvata nella "cassaforte" di Streamlit Cloud
     MY_MASTER_KEY = st.secrets["GEMINI_KEY"]
 except KeyError:
-    # Se non la trova (test locale), usa una stringa vuota per non far crashare l'avvio
     MY_MASTER_KEY = ""
 
 if MY_MASTER_KEY:
@@ -47,6 +45,7 @@ st.markdown("""
         background: #ffffff; border: 1px dashed #4CAF50; border-radius: 15px;
         padding: 15px; text-align: center; margin: 15px 0; min-height: 100px;
     }
+    .stButton>button { width: 100%; border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -62,7 +61,6 @@ def display_ad(label):
     </div>
     """, unsafe_allow_html=True)
 
-# Gestione semplice del consenso (senza Iubenda a pagamento)
 if 'privacy_accepted' not in st.session_state:
     st.session_state.privacy_accepted = False
 
@@ -70,7 +68,6 @@ if 'privacy_accepted' not in st.session_state:
 DATABASE_FILE = "dispensa_v3.json"
 
 if "dispensa" not in st.session_state:
-    # Inizializziamo le liste: Dispensa (Fresco) e Congelati (Surgelati)
     st.session_state.dispensa = []
     st.session_state.congelati = []
     
@@ -93,14 +90,12 @@ def salva_dati():
 # --- 5. INTERFACCIA PRINCIPALE ---
 st.markdown('<div class="main-header"><h1>🥗 Frigo Pro AI</h1><p style="color:white !important;">Gestione Smart & Monetizzazione</p></div>', unsafe_allow_html=True)
 
-# Banner Cookie manuale
 if not st.session_state.privacy_accepted:
     st.markdown('<div class="cookie-banner">🍪 Utilizziamo cookie tecnici e pubblicitari per offrirti un servizio gratuito.</div>', unsafe_allow_html=True)
     if st.button("Accetto i termini e proseguo"):
         st.session_state.privacy_accepted = True
         st.rerun()
 
-# Tabs
 tab1, tab2, tab3, tab4 = st.tabs(["📸 Scanner", "🧊 Surgelati", "🍲 Ricette", "⚖️ Legale"])
 
 with tab1:
@@ -113,12 +108,12 @@ with tab1:
             st.error("Configura la chiave GEMINI_KEY nei Secrets di Streamlit!")
         else:
             img = PIL.Image.open(f_scontrino)
-            img.thumbnail((1024, 1024)) # Ottimizzazione per evitare timeout
+            img.thumbnail((1024, 1024))
             
             with st.spinner("L'IA sta elaborando i dati..."):
                 try:
                     model = genai.GenerativeModel('gemini-2.5-flash')
-                    prompt = "Analizza l'immagine ed estrai una lista di prodotti alimentari. Per ogni prodotto scrivi una riga con questo formato esatto: Nome Prodotto | Categoria | ScadenzaGiorni (stima un numero)"
+                    prompt = "Estrai prodotti alimentari: Nome Prodotto | Categoria | ScadenzaGiorni (stima un numero)"
                     res = model.generate_content([prompt, img])
                     
                     for riga in res.text.strip().split('\n'):
@@ -127,6 +122,62 @@ with tab1:
                             if len(p) >= 3:
                                 st.session_state.dispensa.append({"nome": p[0], "cat": p[1], "scad": p[2]})
                     salva_dati()
-                    st.success("Prodotti aggiunti con successo!")
+                    st.success("Prodotti aggiunti!")
                     st.rerun()
                 except Exception as e:
+                    st.error(f"Errore: {e}")
+
+with tab2:
+    st.subheader("❄️ Archivio Surgelati")
+    display_ad("Freezer Mid")
+    nuovo_surg = st.text_input("Nome prodotto surgelato:")
+    if st.button("Salva nel Freezer"):
+        if nuovo_surg:
+            st.session_state.congelati.append({"nome": nuovo_surg, "cat": "Surgelati", "scad": "180"})
+            salva_dati()
+            st.rerun()
+
+with tab3:
+    st.subheader("🤖 Chef AI")
+    display_ad("Recipe Ads")
+    st.write("Le tue ricette personalizzate basate sulla dispensa appariranno qui.")
+    if st.button("Genera Idea"):
+        st.info("Funzione in arrivo nel prossimo aggiornamento!")
+
+with tab4:
+    st.subheader("Note Legali e Privacy")
+    st.markdown("""
+    **Privacy Policy**
+    Questa app è gratuita grazie alla pubblicità. I tuoi dati (foto) vengono elaborati da Google Gemini per l'estrazione dei testi. 
+    Nessuna foto viene memorizzata permanentemente sui nostri server. 
+    I dati della dispensa risiedono sul tuo browser.
+    
+    **Contatti:** info@frigopro.ai (Esempio)
+    """)
+
+# --- 6. VISUALIZZAZIONE DISPENSE (FINALE COMPLETA) ---
+st.divider()
+col_f, col_s = st.columns(2)
+
+with col_f:
+    st.markdown("### 🍎 Dispensa")
+    # Usiamo una copia della lista per evitare errori durante l'eliminazione
+    for i, v in enumerate(list(st.session_state.dispensa)):
+        st.markdown(f'<div class="card"><b>{v["nome"]}</b><br><small>{v["scad"]} gg</small></div>', unsafe_allow_html=True)
+        if st.button(f"🗑️", key=f"del_f_{i}"):
+            st.session_state.dispensa.pop(i)
+            salva_dati()
+            st.rerun()
+
+with col_s:
+    st.markdown("### 🧊 Freezer")
+    for i, v in enumerate(list(st.session_state.congelati)):
+        st.markdown(f'<div class="card" style="border-left-color:#2196F3;"><b>{v["nome"]}</b><br><small>Surgelato</small></div>', unsafe_allow_html=True)
+        if st.button(f"🗑️", key=f"del_s_{i}"):
+            st.session_state.congelati.pop(i)
+            salva_dati()
+            st.rerun()
+
+# Spazio pubblicitario finale fisso
+st.write("---")
+display_ad("Bottom Sticky")
