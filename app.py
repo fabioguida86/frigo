@@ -13,7 +13,7 @@ except KeyError:
 if MY_MASTER_KEY:
     genai.configure(api_key=MY_MASTER_KEY)
 
-st.set_page_config(page_title="Frigo Pro AI", layout="centered", page_icon="🥗")
+st.set_page_config(page_title="Frigo AI", layout="centered", page_icon="🥗")
 
 # --- 2. GESTIONE LINGUE ---
 languages = {
@@ -190,3 +190,4 @@ with col2:
             st.session_state.congelati.pop(i); salva(); st.rerun()
 
 render_ad("STICKY_FOOTER_AD")
+
