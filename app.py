@@ -113,8 +113,13 @@ with tab1:
             with st.spinner("L'IA sta elaborando i dati..."):
                 try:
                     model = genai.GenerativeModel('gemini-2.5-flash')
-                    prompt = "Analizza l'immagine e restituisci SOLO una lista di prodotti.Per ogni prodotto usa SEMPRE questo formato:Nome Prodotto | Categoria | GiorniAllaScadenzaEsempio:Latte Intero | Latticini | 7Uova | Freschi | 15Non scrivere introduzioni, non usare trattini, solo il formato sopra. Se non vedi la data, stima i giorni in base al prodotto."
-
+                    prompt="""Analizza lo scontrino/foto. Scrivi una riga per ogni prodotto seguendo ESATTAMENTE questo schema:
+                    Nome | Categoria | NumeroGiorni
+                    Esempio:
+                    Yogurt | Latticini | 10
+                    Pollo | Carne | 3
+                    NON scrivere nient'altro. Solo Nome | Categoria | Numero. 
+                    Se non sai la scadenza, inventa un numero logico (es. 5 per carne, 30 per pasta)."""
                     res = model.generate_content([prompt, img])
                     
                     for riga in res.text.strip().split('\n'):
@@ -182,4 +187,5 @@ with col_s:
 # Spazio pubblicitario finale fisso
 st.write("---")
 display_ad("Bottom Sticky")
+
 
