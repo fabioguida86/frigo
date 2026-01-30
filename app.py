@@ -24,7 +24,8 @@ languages = {
         "pantry": "🍎 Dispensa", "manual_add": "Aggiunta Rapida Freezer", "btn_freeze": "Metti in Freezer",
         "chef": "🍲 Chef AI", "btn_recipe": "Genera Ricetta con Alimenti", "expiry": "Scadenza", "days": "gg",
         "frozen_label": "Surgelato", "ai_msg": "Filtrando gli alimenti...", 
-        "prompt_rules": "Estrai SOLO prodotti alimentari. Ignora detersivi o sacchetti. Formato: NOME | GIORNI_SCADENZA."
+        "prompt_rules": "Estrai SOLO prodotti alimentari. Ignora detersivi o sacchetti. Formato: NOME | GIORNI_SCADENZA.",
+        "clear_pantry": "🗑️ Svuota Tutto"
     },
     "English": {
         "scan": "📸 Scanner", "freezer": "🧊 Freezer", "recipes": "🍲 Recipes", "legal": "⚖️ Legal", "info": "📩 Info",
@@ -33,7 +34,8 @@ languages = {
         "pantry": "🍎 Pantry", "manual_add": "Quick Add Freezer", "btn_freeze": "Add to Freezer",
         "chef": "🍲 AI Chef", "btn_recipe": "Generate Recipe with Pantry", "expiry": "Expiry", "days": "days",
         "frozen_label": "Frozen", "ai_msg": "Filtering food items...", 
-        "prompt_rules": "Extract ONLY food products. Ignore detergents or bags. Format: NAME | DAYS_TO_EXPIRY."
+        "prompt_rules": "Extract ONLY food products. Ignore detergents or bags. Format: NAME | DAYS_TO_EXPIRY.",
+        "clear_pantry": "🗑️ Clear All"
     },
     "Español": {
         "scan": "📸 Scanner", "freezer": "🧊 Congelador", "recipes": "🍲 Recetas", "legal": "⚖️ Legal", "info": "📩 Info",
@@ -42,7 +44,8 @@ languages = {
         "pantry": "🍎 Despensa", "manual_add": "Añadir al Congelador", "btn_freeze": "Congelar",
         "chef": "🍲 Chef AI", "btn_recipe": "Generar Receta con Despensa", "expiry": "Caducidad", "days": "días",
         "frozen_label": "Congelado", "ai_msg": "Filtrando alimentos...", 
-        "prompt_rules": "Extraer SOLO productos alimenticios. Ignorar detergentes o bolsas. Formato: NOMBRE | DIAS_CADUCIDAD."
+        "prompt_rules": "Extraer SOLO productos alimenticios. Ignorar detergentes o bolsas. Formato: NOMBRE | DIAS_CADUCIDAD.",
+        "clear_pantry": "🗑️ Vaciar Todo"
     }
 }
 
@@ -58,6 +61,8 @@ st.markdown(f"""
     .product-name {{ color: #1a1a1a !important; font-size: 1rem; font-weight: 600; }}
     .expiry-text {{ color: #555 !important; font-size: 0.85rem; }}
     .stButton>button {{ width: 100%; border-radius: 8px; height: 35px; }}
+    /* Stile per il tasto svuota (Rosso) */
+    div.stButton > button:first-child:active {{ background-color: #ff4b4b; color: white; }}
     .ad-box {{ text-align:center; margin: 10px 0; padding: 10px; background:#f0f0f0; border:1px dashed #bbb; border-radius:10px; font-size:0.65rem; color:#666; font-family:sans-serif; }}
     </style>
     """, unsafe_allow_html=True)
@@ -135,7 +140,7 @@ with tab4:
 
 with tab5:
     st.subheader("📩 Chi Siamo & Contatti")
-    st.markdown("**Frigo Pro AI** - Technology for zero food waste.\nEmail: fabio.guida86@gmail.com")
+    st.markdown("**Frigo Pro AI** - Technology for zero food waste.\nEmail: support@frigopro.ai")
     with st.form("contact"):
         n = st.text_input("Name")
         m = st.text_area("Message")
@@ -149,6 +154,14 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.markdown(f"### {t['pantry']}")
+    
+    # PULSANTE SVUOTA TUTTO (Dispensa)
+    if st.session_state.dispensa:
+        if st.button(t["clear_pantry"], key="clear_d"):
+            st.session_state.dispensa = []
+            salva()
+            st.rerun()
+
     for i, v in enumerate(list(st.session_state.dispensa)):
         st.markdown(f'<div class="card"><div class="product-name">{v["nome"]}</div><div class="expiry-text">{v["scad"]} {t["days"]}</div></div>', unsafe_allow_html=True)
         c1, c2 = st.columns(2)
@@ -163,6 +176,14 @@ with col1:
 
 with col2:
     st.markdown(f"### {t['freezer']}")
+    
+    # PULSANTE SVUOTA TUTTO (Freezer)
+    if st.session_state.congelati:
+        if st.button(t["clear_pantry"], key="clear_c"):
+            st.session_state.congelati = []
+            salva()
+            st.rerun()
+
     for i, v in enumerate(list(st.session_state.congelati)):
         st.markdown(f'<div class="card" style="border-left-color: #2196F3;"><div class="product-name">{v["nome"]}</div><div class="expiry-text">{v["scad"]} ({t["frozen_label"]})</div></div>', unsafe_allow_html=True)
         if st.button("🗑️", key=f"s_{i}"):
