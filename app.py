@@ -125,4 +125,7 @@ with col1:
 
 with col2:
     st.markdown("### 🧊 Freezer")
-    for i, v in enumerate(list(st.session_state
+    for i, v in enumerate(list(st.session_state.congelati)):
+        st.markdown(f'<div class="card" style="border-left-color: #2196F3;"><div class="product-name">{v["nome"]}</div><div class="expiry-text">{v["scad"]} (Surgelato)</div></div>', unsafe_allow_html=True)
+        if st.button("🗑️", key=f"s_{i}"):
+            st.session_state.congelati.pop(i); salva(); st.rerun()
