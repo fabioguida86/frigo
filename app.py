@@ -3,7 +3,12 @@ import google.generativeai as genai
 import PIL.Image
 import json
 import os
-
+# --- CODICE DI VERIFICA AD-MAVEN ---
+st.markdown("""
+    <head>
+        <meta name='admaven-placement' content='Bqjw5rdgF'>
+    </head>
+""", unsafe_allow_html=True)
 # --- 1. CONFIGURAZIONE CHIAVE E MODELLO ---
 try:
     MY_MASTER_KEY = st.secrets["GEMINI_KEY"]
@@ -190,4 +195,5 @@ with col2:
             st.session_state.congelati.pop(i); salva(); st.rerun()
 
 render_ad("STICKY_FOOTER_AD")
+
 
