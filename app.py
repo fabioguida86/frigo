@@ -94,37 +94,36 @@ with tab1:
     render_ad("BANNER_TOP_SCANNER")
     tipo_scan = st.radio(t["mode"], [t["receipt"], t["barcode"]], horizontal=True)
     
-    # 1. Input Fotocamera (Apre la webcam/camera del telefono)
     f_camera = st.camera_input(t["upload_text"])
-    
-    # 2. Input Galleria (Opzionale, per caricare foto già scattate)
     f_upload = st.file_uploader("Oppure scegli dalla galleria", type=["jpg", "png", "jpeg"])
-    
-    # Scegliamo quale immagine processare (priorità alla fotocamera)
     f_img = f_camera if f_camera else f_upload
     
     if f_img and st.button(t["btn_scan"]):
         img = PIL.Image.open(f_img)
         img.thumbnail((1024, 1024))
         
-        # Utilizziamo il modello aggiornato gemini-2.5-flash come richiesto
         model = genai.GenerativeModel('gemini-2.5-flash')
-        prompt = f"{t['prompt_rules']} Language: {sel_lang}."
+        
+        # --- LOGICA INTELLIGENTE DEL PROMPT ---
+        if tipo_scan == t["barcode"]:
+            # Prompt specifico per Codice a Barre
+            prompt = """Analizza l'immagine. Se vedi un codice a barre, decodificalo e identifica il prodotto alimentare. 
+            Rispondi SOLO con il formato: NOME PRODOTTO | GIORNI_SCADENZA_STIMATI.
+            Esempio: Pasta Barilla 500g | 365. Se non lo trovi, prova a capire cos'è dall'etichetta."""
+        else:
+            # Prompt classico per Scontrino
+            prompt = f"{t['prompt_rules']} Language: {sel_lang}."
         
         with st.spinner(t["ai_msg"]):
             res = model.generate_content([prompt, img])
+            # Pulizia e aggiunta alla dispensa
             for riga in res.text.strip().split('\n'):
                 if "|" in riga:
                     parti = riga.split("|")
                     nome = parti[0].strip().replace("-", "").replace(":", "")
-                    # Pulizia della stringa scadenza per estrarre solo i numeri
                     scad = "".join(filter(str.isdigit, parti[1])) if len(parti)>1 else "7"
-                    st.session_state.dispensa.append({
-                        "nome": nome, 
-                        "scad": scad if scad else "7"
-                    })
-            salva()
-            st.rerun()
+                    st.session_state.dispensa.append({"nome": nome, "scad": scad if scad else "7"})
+            salva(); st.rerun()
 with tab2:
     st.subheader(f"❄️ {t['manual_add']}")
     nuovo = st.text_input(f"{t['pantry']} name:", key="manual_f")
@@ -203,6 +202,7 @@ with col2:
             st.session_state.congelati.pop(i); salva(); st.rerun()
 
 render_ad("STICKY_FOOTER_AD")
+
 
 
 
