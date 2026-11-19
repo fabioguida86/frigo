@@ -1,0 +1,7 @@
+streamlit>=1.50
+google-generativeai
+google-genai>=1.0
+Pillow
+pyzbar
+requests
+pandas

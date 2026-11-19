@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<body>
+<script>
+// Componente invisibile: legge e scrive i dati dell'utente nel localStorage del SUO browser.
+// Protocollo dei componenti Streamlit (v1) implementato a mano, senza dipendenze.
+let ultimoNonce = -1;
+let letto = false;
+
+function invia(tipo, dati) {
+  window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: tipo }, dati), "*");
+}
+
+window.addEventListener("message", (evento) => {
+  if (!evento.data || evento.data.type !== "streamlit:render") return;
+  const args = evento.data.args || {};
+  const nonce = Number(args.nonce) || 0;
+  if (letto && nonce <= ultimoNonce) return;  // niente di nuovo da fare
+
+  const risposta = { nonce: nonce };
+  try {
+    if (!letto) risposta.valore = window.localStorage.getItem(args.chiave);
+    if (args.scrivi !== null && args.scrivi !== undefined && nonce > ultimoNonce) {
+      window.localStorage.setItem(args.chiave, args.scrivi);
+    }
+  } catch (errore) {
+    risposta.errore = String(errore);
+  }
+  letto = true;
+  ultimoNonce = nonce;
+  invia("streamlit:setComponentValue", { value: risposta, dataType: "json" });
+});
+
+invia("streamlit:componentReady", { apiVersion: 1 });
+invia("streamlit:setFrameHeight", { height: 0 });
+</script>
+</body>
+</html>
