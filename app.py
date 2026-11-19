@@ -6,7 +6,7 @@ Fonti di inserimento:
                       con la foto della data stampata l'AI legge la scadenza REALE.
   * Manuale
 
-Avvio:  streamlit run frigo_ai.py
+Avvio:  streamlit run app.py
 Dati:   salvati nel localStorage del browser di ogni utente (componenti/archivio), con backup scaricabile.
 Chiave: ogni utente collega la PROPRIA chiave Gemini dall'app (con consenso esplicito).
         La chiave non viene salvata sul server: resta nella sessione e, se l'utente lo sceglie,
@@ -18,6 +18,7 @@ import html
 import json
 import os
 import re
+import typing
 import uuid
 from datetime import date, datetime, timedelta
 from enum import Enum
@@ -29,6 +30,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 from PIL import Image, ImageOps
 from pydantic import BaseModel
@@ -556,15 +558,52 @@ def pannello_chiave(prefisso: str) -> None:
                         st.rerun()
 
 
+def _json_dal_testo(testo: str, schema: type[BaseModel]) -> BaseModel:
+    """Estrae e ripara il JSON da una risposta di testo libero (modelli senza modalità JSON)."""
+    inizio, fine = (testo or "").find("{"), (testo or "").rfind("}")
+    if inizio < 0 or fine <= inizio:
+        raise ValueError("l'AI non ha restituito dati leggibili, riprova.")
+    dati = json.loads(testo[inizio:fine + 1])
+
+    def ripara(oggetto, modello: type[BaseModel]):
+        if not isinstance(oggetto, dict):
+            return
+        for nome, campo in modello.model_fields.items():
+            if type(None) in typing.get_args(campo.annotation):
+                oggetto.setdefault(nome, None)  # campi facoltativi omessi dal modello
+        if "categoria" in oggetto:
+            oggetto["categoria"] = normalizza_categoria(str(oggetto["categoria"]))
+        if "luogo" in oggetto:
+            luogo = str(oggetto["luogo"]).lower()
+            oggetto["luogo"] = luogo if luogo in LUOGHI else "dispensa"
+        if modello is Scontrino:
+            for articolo in oggetto.get("articoli") or []:
+                ripara(articolo, ArticoloScontrino)
+
+    ripara(dati, schema)
+    return schema.model_validate(dati)
+
+
 def chiedi_gemini(contenuti: list, schema: Optional[type[BaseModel]] = None):
-    config = types.GenerateContentConfig(temperature=0.2)
-    if schema is not None:
-        config.response_mime_type = "application/json"
-        config.response_schema = schema
-    risposta = client_gemini().models.generate_content(model=MODELLO, contents=contenuti, config=config)
+    client = client_gemini()
     if schema is None:
-        return risposta.text
-    return risposta.parsed if isinstance(risposta.parsed, schema) else schema.model_validate_json(risposta.text)
+        config = types.GenerateContentConfig(temperature=0.2)
+        return client.models.generate_content(model=MODELLO, contents=contenuti, config=config).text
+    try:
+        config = types.GenerateContentConfig(temperature=0.2, response_mime_type="application/json",
+                                             response_schema=schema)
+        risposta = client.models.generate_content(model=MODELLO, contents=contenuti, config=config)
+        return risposta.parsed if isinstance(risposta.parsed, schema) else schema.model_validate_json(risposta.text)
+    except genai_errors.ClientError as e:
+        messaggio = str(e).lower()
+        if not any(x in messaggio for x in ("json mode", "response_schema", "response schema", "mime")):
+            raise
+    # Il modello non supporta l'output JSON strutturato: chiedo il JSON nel testo della risposta.
+    istruzioni = ("Rispondi SOLO con un oggetto JSON valido (niente testo prima o dopo, niente ```), "
+                  "conforme a questo JSON Schema:\n" + json.dumps(schema.model_json_schema(), ensure_ascii=False))
+    config = types.GenerateContentConfig(temperature=0.2)
+    risposta = client.models.generate_content(model=MODELLO, contents=list(contenuti) + [istruzioni], config=config)
+    return _json_dal_testo(risposta.text, schema)
 
 
 PROMPT_SCONTRINO = """Analizza questa foto di uno scontrino di un supermercato italiano.
