@@ -3,5 +3,6 @@ google-generativeai
 google-genai>=1.0
 Pillow
 pyzbar
+opencv-python-headless
 requests
 pandas

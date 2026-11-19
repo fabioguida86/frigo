@@ -365,7 +365,7 @@ def cerca_open_food_facts(codice: str) -> Optional[dict]:
     try:
         r = requests.get(
             f"https://world.openfoodfacts.org/api/v2/product/{codice}.json",
-            params={"fields": "product_name_it,product_name,brands,categories,quantity"},
+            params={"fields": "product_name_it,product_name,brands,categories,categories_tags,quantity"},
             headers={"User-Agent": "FrigoAI/1.0 (app personale)"},
             timeout=8,
         )
@@ -373,6 +373,55 @@ def cerca_open_food_facts(codice: str) -> Optional[dict]:
     except (requests.RequestException, ValueError):
         return None
     return dati.get("product") if dati.get("status") == 1 else None
+
+
+# Tag delle categorie di Open Food Facts (in inglese) -> categorie dell'app. L'ordine conta.
+OFF_CATEGORIE = [
+    ("frozen", "Surgelati"), ("cheese", "Formaggi"), ("yogurt", "Latticini"), ("milk", "Latticini"),
+    ("dairies", "Latticini"), ("cream", "Latticini"), ("butter", "Latticini"), ("eggs", "Uova"),
+    ("ham", "Salumi"), ("sausage", "Salumi"), ("salami", "Salumi"), ("prepared-meats", "Salumi"),
+    ("meat", "Carne"), ("poultr", "Carne"), ("fish", "Pesce"), ("seafood", "Pesce"),
+    ("fresh-pasta", "Pasta fresca"), ("pasta", "Pasta, riso e cereali"), ("rice", "Pasta, riso e cereali"),
+    ("cereal", "Pasta, riso e cereali"), ("flour", "Pasta, riso e cereali"), ("bread", "Pane e forno"),
+    ("sweet-spread", "Dolci e snack"), ("hazelnut", "Dolci e snack"), ("cocoa", "Dolci e snack"),
+    ("biscuit", "Dolci e snack"), ("chocolate", "Dolci e snack"), ("snack", "Dolci e snack"),
+    ("confection", "Dolci e snack"), ("dessert", "Dolci e snack"), ("cake", "Dolci e snack"),
+    ("sauce", "Conserve e salse"), ("pesto", "Conserve e salse"), ("condiment", "Conserve e salse"),
+    ("canned", "Conserve e salse"), ("spread", "Conserve e salse"), ("oil", "Conserve e salse"),
+    ("alcoholic", "Alcolici"), ("wine", "Alcolici"), ("beer", "Alcolici"), ("spirit", "Alcolici"),
+    ("juice", "Bevande"), ("water", "Bevande"), ("beverage", "Bevande"), ("drink", "Bevande"),
+    ("fruit", "Frutta"), ("vegetable", "Verdura"),
+]
+
+
+def categoria_da_off(off: dict) -> str:
+    for tag in reversed(off.get("categories_tags") or []):  # dal più specifico al più generico
+        t = tag.split(":", 1)[-1]
+        if t.startswith("plant-based-foods"):
+            continue
+        for parola, categoria in OFF_CATEGORIE:
+            if parola in t:
+                return categoria
+    return normalizza_categoria(off.get("categories") or "")
+
+
+def dati_off(off: dict) -> tuple[str, Optional[str], str]:
+    """(nome, marca, categoria) da un prodotto di Open Food Facts."""
+    nome = (off.get("product_name_it") or off.get("product_name") or "").strip()
+    quantita = (off.get("quantity") or "").strip()
+    if nome and quantita and quantita not in nome:
+        nome = f"{nome} {quantita}"
+    marca = (off.get("brands") or "").split(",")[0].strip() or None
+    return nome or "Prodotto senza nome", marca, categoria_da_off(off)
+
+
+def ean_valido(codice: str) -> bool:
+    if not re.fullmatch(r"\d{8}|\d{12,14}", codice or ""):
+        return False
+    cifre = [int(c) for c in codice]
+    controllo = cifre.pop()
+    somma = sum(c * (3 if i % 2 == 0 else 1) for i, c in enumerate(reversed(cifre)))
+    return (10 - somma % 10) % 10 == controllo
 
 
 # =============================================================================
@@ -563,11 +612,28 @@ def analizza_prodotto(img_codice: Image.Image, img_data: Optional[Image.Image]) 
 
     if ean:
         note.append(f"Codice letto: **{ean}**")
-        note.append("Trovato su Open Food Facts ✅" if off else "Non presente su Open Food Facts: identificazione dalla foto.")
-    else:
-        note.append("Codice a barre non decodificato: provo a riconoscere la confezione.")
+        note.append("Trovato su Open Food Facts ✅" if off else "Non presente su Open Food Facts.")
     if scad_gs1:
         note.append(f"Scadenza contenuta nel codice GS1: **{scad_gs1:%d/%m/%Y}** ✅")
+
+    if not chiave_utente():  # modalità senza AI: solo codice a barre + Open Food Facts
+        if not ean:
+            raise ValueError("codice a barre non letto. Inquadra solo il codice, da vicino, dritto e senza "
+                             "riflessi, poi riprova. Con la chiave AI collegata posso anche riconoscere la confezione.")
+        if off:
+            nome, marca, categoria = dati_off(off)
+        else:
+            nome, marca, categoria = f"Prodotto {ean}", None, "Altro"
+            note.append("Scrivi il nome del prodotto nella tabella qui sotto.")
+        if scad_gs1:
+            scadenza, tipo = scad_gs1, "reale"
+        else:
+            scadenza, tipo = date.today() + timedelta(days=CATEGORIE[categoria][2]), "stimata"
+            note.append("Scadenza **stimata** per categoria: correggila nella tabella con la data sulla confezione.")
+        return riga_bozza(nome, categoria, CATEGORIE[categoria][1], 1, scadenza, tipo, marca, ean), note
+
+    if not ean:
+        note.append("Codice a barre non decodificato: provo a riconoscere la confezione.")
 
     contesto = f"Codice a barre letto: {ean}." if ean else "Codice a barre non decodificato."
     if off:
@@ -582,6 +648,15 @@ def analizza_prodotto(img_codice: Image.Image, img_data: Optional[Image.Image]) 
     if not p.alimento:
         raise ValueError("Nella foto non sembra esserci un alimento.")
 
+    nome, marca = p.nome, p.marca
+    codice_ai = re.sub(r"\D", "", p.codice_a_barre or "")
+    if not ean and ean_valido(codice_ai):  # l'AI ha letto le cifre che il lettore locale non ha decodificato
+        ean = codice_ai
+        if off_ai := cerca_open_food_facts(ean):
+            nome, marca_off, _ = dati_off(off_ai)
+            marca = marca_off or marca
+            note.append(f"Codice letto dall'AI: **{ean}**, trovato su Open Food Facts ✅")
+
     scad_ai = parse_data(p.data_scadenza)
     if scad_gs1:
         scadenza, tipo = scad_gs1, "reale"
@@ -591,8 +666,7 @@ def analizza_prodotto(img_codice: Image.Image, img_data: Optional[Image.Image]) 
     else:
         scadenza, tipo = date.today() + timedelta(days=max(0, p.giorni_conservazione)), "stimata"
         note.append("Nessuna data leggibile: scadenza **stimata**. Fotografa la data per averla esatta.")
-    riga = riga_bozza(p.nome, p.categoria.value, p.luogo.value, 1, scadenza, tipo,
-                      p.marca, ean or p.codice_a_barre)
+    riga = riga_bozza(nome, p.categoria.value, p.luogo.value, 1, scadenza, tipo, marca, ean or codice_ai)
     return riga, note
 
 
@@ -818,7 +892,7 @@ with tab_aggiungi:
         modo = st.radio("Cosa vuoi fotografare?", ["🧾 Scontrino", "🔍 Prodotto (codice a barre)", "✍️ Manuale"],
                         horizontal=True)
         ai_pronta = bool(chiave_utente())
-        if not ai_pronta and modo != "✍️ Manuale":
+        if not ai_pronta and modo == "🧾 Scontrino":
             pannello_chiave("aggiungi")
 
         if modo == "🧾 Scontrino":
@@ -838,13 +912,20 @@ with tab_aggiungi:
                         st.warning("Nessun alimento trovato sullo scontrino.")
 
         elif modo == "🔍 Prodotto (codice a barre)":
-            st.caption("1️⃣ Fotografa il **codice a barre**. 2️⃣ (consigliato) Fotografa la **data di scadenza** "
-                       "stampata: senza, la scadenza viene solo stimata.")
+            if ai_pronta:
+                st.caption("1️⃣ Fotografa il **codice a barre**. 2️⃣ (consigliato) Fotografa la **data di scadenza** "
+                           "stampata: senza, la scadenza viene solo stimata.")
+            else:
+                st.caption("Fotografa il **codice a barre** da vicino: il prodotto viene cercato nel database "
+                           "Open Food Facts e la scadenza è stimata (puoi correggerla).")
+                with st.expander("✨ Vuoi che legga anche la data sulla confezione? Collega l'AI (facoltativo)"):
+                    pannello_chiave("codice")
             foto_codice = st.file_uploader("Foto del codice a barre", type=["jpg", "jpeg", "png", "webp"],
                                            key="up_codice")
-            foto_data = st.file_uploader("Foto della data di scadenza (facoltativa)",
-                                         type=["jpg", "jpeg", "png", "webp"], key="up_data")
-            if foto_codice and st.button("🚀 Riconosci prodotto", disabled=not ai_pronta, type="primary"):
+            foto_data = (st.file_uploader("Foto della data di scadenza (facoltativa)",
+                                          type=["jpg", "jpeg", "png", "webp"], key="up_data")
+                         if ai_pronta else None)
+            if foto_codice and st.button("🚀 Riconosci prodotto", type="primary"):
                 with st.spinner("Riconoscimento in corso..."):
                     try:
                         riga, note = analizza_prodotto(apri_immagine(foto_codice),
